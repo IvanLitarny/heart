@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta name="robots" content="noindex, nofollow">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heart love By Alex Dev</title>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000000;
+    }
+
+    canvas {
+      display: block;
+      touch-action: none;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="galaxy-canvas"></canvas>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+</script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('galaxy-canvas'), antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false;
+    controls.minDistance = 30;
+    controls.maxDistance = 280;
+    controls.zoomSpeed = 0.8;
+
+    const galaxyGroup = new THREE.Group();
+    scene.add(galaxyGroup);
+
+    const heartScale = 3.5;
+    const maxStarHeight = 15;
+
+    // ---------- HEART FUNCTIONS ----------
+    function getHeartPoint(scaleMultiplier) {
+      const t = Math.random() * 2 * Math.PI;
+      const r = Math.sqrt(Math.random()) * heartScale * scaleMultiplier;
+      const x = r * 16 * Math.pow(Math.sin(t), 3);
+      const z = -r * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+      return { x, z };
+    }
+
+    // Генерация точек равномерно для фоток
+    function generateHeartPoints(count, minDistance = 6) {
+      const points = [];
+      while (points.length < count) {
+        const p = getHeartPoint(1.05);
+        let valid = true;
+        for (const q of points) {
+          const dx = p.x - q.x;
+          const dz = p.z - q.z;
+          if (Math.sqrt(dx * dx + dz * dz) < minDistance) { valid = false; break; }
+        }
+        if (valid) points.push(p);
+      }
+      return points;
+    }
+
+    // ---------- PARTICLE TEXTURE ----------
+    function createCircleTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    const particleTexture = createCircleTexture();
+
+    // ---------- HEART STARS ----------
+    const starCount = 20000;
+    const starGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(starCount * 3);
+    const colors = new Float32Array(starCount * 3);
+    const centerColor = new THREE.Color(0xff6666);
+    const edgeColor = new THREE.Color(0x6666ff);
+    const heartBaseColors = [];
+    const heartTwinkleData = [];
+
+    for (let i = 0; i < starCount; i++) {
+      const { x, z } = getHeartPoint(1.1);
+      const y = (Math.random() - 0.5) * maxStarHeight;
+      positions.set([x, y, z], i * 3);
+      const c = new THREE.Color().copy(centerColor).lerp(edgeColor, Math.min(Math.sqrt(x * x + z * z) / 40, 1));
+      colors.set([c.r, c.g, c.b], i * 3);
+      heartBaseColors.push(c);
+      heartTwinkleData.push({ speed: Math.random() * 0.5 + 0.1, offset: Math.random() * 10 });
+    }
+
+    starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    const starMaterial = new THREE.PointsMaterial({
+      size: 0.8,
+      map: particleTexture,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      vertexColors: true,
+      depthWrite: false
+    });
+
+    const stars = new THREE.Points(starGeometry, starMaterial);
+    galaxyGroup.add(stars);
+
+    // ---------- IMAGES ----------
+    const textureLoader = new THREE.TextureLoader();
+    const imageUrls = ['1.png', '2.png', '3.png', '4.png', '5.png', '6.png',
+      '1.png', '2.png', '3.png', '4.png', '5.png', '6.png',
+      '7.png', '8.png', '9.png', '10.png', '11.png', '12.png',
+      '7.png', '8.png', '9.png', '10.png', '11.png', '12.png'];
+
+    const imageSprites = [];
+    const imagePoints = generateHeartPoints(imageUrls.length, 8);
+
+    for (let i = 0; i < imageUrls.length; i++) {
+      const tex = textureLoader.load(imageUrls[i]);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, blending: THREE.NormalBlending, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+
+      const { x, z } = imagePoints[i];
+      const y = (Math.random() - 0.5) * 4; // небольшое вертикальное смещение
+      sprite.position.set(x, y, z);
+      sprite.scale.set(8, 8, 1);
+
+      galaxyGroup.add(sprite);
+      imageSprites.push(sprite);
+    }
+
+    // ---------- BACKGROUND STARS ----------
+    const bgStarCount = 5000;
+    const bgGeo = new THREE.BufferGeometry();
+    const bgPos = new Float32Array(bgStarCount * 3);
+    const bgCol = new Float32Array(bgStarCount * 3);
+    const bgTwinkleData = [];
+
+    for (let i = 0; i < bgStarCount; i++) {
+      const u = Math.random(), v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const r = 400 + Math.random() * 100;
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.sin(phi) * Math.sin(theta);
+      const z = r * Math.cos(phi);
+      bgPos.set([x, y, z], i * 3);
+      bgCol.set([1, 1, 1], i * 3);
+      bgTwinkleData.push({ speed: Math.random() * 0.5 + 0.1, offset: Math.random() * 10 });
+    }
+
+    bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+    bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+
+    const bgMat = new THREE.PointsMaterial({
+      size: 4,
+      map: particleTexture,
+      vertexColors: true,
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false
+    });
+
+    const backgroundStars = new THREE.Points(bgGeo, bgMat);
+    scene.add(backgroundStars);
+
+    // ---------- RESIZE ----------
+    function onWindowResize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.position.set(0, 40, 85);
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', onWindowResize);
+    onWindowResize();
+
+    // ---------- ANIMATION ----------
+    const clock = new THREE.Clock();
+
+    function animate() {
+      const t = clock.getElapsedTime();
+      galaxyGroup.rotation.y = t * 0.05;
+
+      // twinkle heart stars
+      const colAttr = stars.geometry.attributes.color;
+      for (let i = 0; i < starCount; i++) {
+        const data = heartTwinkleData[i];
+        const b = (Math.sin(t * data.speed + data.offset) + 1) / 2 * 0.7 + 0.3;
+        const base = heartBaseColors[i];
+        colAttr.setXYZ(i, base.r * b, base.g * b, base.b * b);
+      }
+      colAttr.needsUpdate = true;
+
+      // twinkle background stars
+      const bgColAttr = backgroundStars.geometry.attributes.color;
+      for (let i = 0; i < bgStarCount; i++) {
+        const data = bgTwinkleData[i];
+        const b = (Math.sin(t * data.speed + data.offset) + 1) / 2 * 0.7 + 0.3;
+        bgColAttr.setXYZ(i, b, b, b);
+      }
+      bgColAttr.needsUpdate = true;
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+  </script>
+</body>
+
+</html>
